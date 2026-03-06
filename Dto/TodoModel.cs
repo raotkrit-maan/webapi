@@ -10,4 +10,9 @@ namespace webapi.Dto
         public string Title{get;set;}=string.Empty;
         public bool IsDone{get;set;}=false;
     }
+    public class ViewTodoResponse
+    {
+        public string Title{get;set;}=string.Empty;
+        public bool IsDone{get;set;}=false;
+    }
 }
