@@ -9,8 +9,11 @@ namespace webapi.Services{
     public interface IUserService
     {
         Task<PagedResult<UsersResponse>>GetAsync(string? keyword, int Page=1,int PageSize=10);
-
         Task<UserResponse>GetByIdAsync(int UserId);
+        Task<UserResponse> CreateAsync(UserCreateRequest Request);
+        Task<UserResponse?> UpdateAsync(int userId, UserUpdateRequest Request);
+        Task<bool> DeleteAsync(int userId);
+        Task<List<RoleResponse>> GetRoleList();
     }
     public class UserService : IUserService
     {
@@ -20,6 +23,56 @@ namespace webapi.Services{
         {
             this.db = db;
         }
+
+      public async Task<UserResponse> CreateAsync(UserCreateRequest Request)
+        {
+            var Username = Request.Username.Trim();
+
+            var IsDuplicate = await db.Users.AnyAsync(x => x.Username == Username);
+            if (IsDuplicate) 
+            {
+                throw new InvalidOperationException("มีชื่อผู้ใช้ซ้ำในระบบแล้ว"); 
+            }
+
+            var Role = await db.Roles.FirstOrDefaultAsync(x => x.RoleId == Request.RoleId);
+
+            if (Role is null) 
+            { 
+                throw new InvalidOperationException("ไม่พบ Role ที่เลือก"); 
+            }
+
+            var user = new User
+            {
+                Firstname = Request.Firstname.Trim(),
+                Lastname = Request.Lastname.Trim(),
+                Username = Username,
+                Email = string.IsNullOrWhiteSpace(Request.Email) ? null : Request.Email.Trim(),
+                IsActive = Request.IsActive
+            };
+
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+
+            db.RoleUsers.Add(new RoleUser
+            {
+                UserId = user.UserId,
+                RoleId = Role.RoleId
+            });
+            await db.SaveChangesAsync();
+
+            return new UserResponse
+            {
+                UserId = user.UserId,
+                Firstname = user.Firstname,
+                Lastname = user.Lastname,
+                Username = user.Username,
+                Email = user.Email,
+                IsActive = user.IsActive,
+                RoleId = Role.RoleId,
+                RoleName = Role.RoleName
+            };
+        }
+
         public async Task<List<User>> GetAsync()
         {
             return await db.Users.ToListAsync();
@@ -89,6 +142,88 @@ namespace webapi.Services{
                             };
 
             return await BaseQuery.FirstOrDefaultAsync();
+        }
+
+        public async Task<List<RoleResponse>> GetRoleList()
+        {
+            var Role = await db.Roles.Select(x => new RoleResponse
+            {
+               RoleId = x.RoleId,
+               RoleName = x.RoleName
+            }).ToListAsync();
+            return Role;
+        }
+
+        public async Task<UserResponse?> UpdateAsync(int UserId, UserUpdateRequest Request)
+        {
+            var user = await db.Users.FirstOrDefaultAsync(x => x.UserId == UserId);
+            if (user is null)
+            { 
+                return null; 
+            }
+
+            var Username = Request.Username.Trim();
+
+            var IsDuplicate = await db.Users.AnyAsync(x => x.Username == Username && x.UserId != UserId);
+            if (IsDuplicate)
+            {
+                throw new InvalidOperationException("มีชื่อผู้ใช้ซ้ำในระบบแล้ว");
+            }
+
+            var Role = await db.Roles.FirstOrDefaultAsync(x => x.RoleId == Request.RoleId);
+
+            if (Role is null)
+            {
+                throw new InvalidOperationException("ไม่พบ Role ที่เลือก");
+            }
+
+            user.Firstname = Request.Firstname.Trim();
+            user.Lastname = Request.Lastname.Trim();
+            user.Username = Username;
+            user.Email = string.IsNullOrWhiteSpace(Request.Email) ? null : Request.Email.Trim(); //แทน if...else
+            user.IsActive = Request.IsActive;
+
+            var ru = await db.RoleUsers.FirstOrDefaultAsync(x => x.UserId == UserId);
+            if (ru is null)
+            {
+                db.RoleUsers.Add(new RoleUser { UserId = UserId, RoleId = Role.RoleId });
+            }
+            else
+            {
+                ru.RoleId = Role.RoleId;
+            }
+
+            await db.SaveChangesAsync();
+
+            return new UserResponse
+            {
+                UserId = user.UserId,
+                Firstname = user.Firstname,
+                Lastname = user.Lastname,
+                Username = user.Username,
+                Email = user.Email,
+                IsActive = user.IsActive,
+                RoleId = Role.RoleId,
+                RoleName = Role.RoleName
+            };
+        }
+        public async Task<bool> DeleteAsync(int userId)
+        {
+            var User = await db.Users.FirstOrDefaultAsync(x => x.UserId == userId);
+            if (User is null)
+            { 
+                return false; 
+            }
+
+            var RoleUsers = await db.RoleUsers.Where(x => x.UserId == userId).ToListAsync();
+            if (RoleUsers.Count > 0)
+            {
+                db.RoleUsers.RemoveRange(RoleUsers);
+            }
+
+            db.Users.Remove(User);
+            await db.SaveChangesAsync();
+            return true;
         }
     }
 }

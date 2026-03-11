@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using webapi.Dto;
 using webapi.Services;
 
 namespace webapi.Controllers{
@@ -25,5 +26,29 @@ namespace webapi.Controllers{
             return result is null ? NotFound(new {message="ไม่พบข้อมูล"}): Ok(result);
         }
 
+        [HttpPost]
+    public async Task<IActionResult> Create([FromBody] UserCreateRequest Request)
+        {
+            var Created = await service.CreateAsync(Request);
+            return CreatedAtAction(nameof(GetById), new { id = Created.UserId }, Created);
+        }
+        [HttpPut("{Id:int}")]
+    public async Task<IActionResult> Update([FromRoute] int Id, [FromBody] UserUpdateRequest Request)
+        {
+            var Updated = await service.UpdateAsync(Id, Request);
+            return Updated is null ? NotFound() : Ok(Updated);
+        }
+        [HttpDelete("{Id:int}")]
+        public async Task<IActionResult> Delete([FromRoute] int Id)
+        {
+            var ok = await service.DeleteAsync(Id);
+            return ok ? NoContent() : NotFound();
+        }
+        [HttpGet("role")]
+        public async Task<IActionResult> GetRole()
+        {
+            var Result = await service.GetRoleList();
+            return Ok(Result);
+        }
     }
 }
